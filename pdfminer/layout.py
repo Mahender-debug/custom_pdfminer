@@ -1,6 +1,6 @@
 import heapq
 import logging
-
+import re
 from .utils import INF
 from .utils import Plane
 from .utils import apply_matrix_pt
@@ -9,12 +9,15 @@ from .utils import fsplit
 from .utils import get_bound
 from .utils import matrix2str
 from .utils import uniq
+import datetime
+from pprint import pprint
+from dateutil import parser
 
+import pandas as pd
 logger = logging.getLogger(__name__)
 
 
 class IndexAssigner:
-
     def __init__(self, index=0):
         self.index = index
         return
@@ -56,13 +59,13 @@ class LAParams:
     :param all_texts: If layout analysis should be performed on text in
         figures.
     """
-
     def __init__(self,
                  line_overlap=0.5,
                  char_margin=2.0,
                  line_margin=0.5,
                  word_margin=0.1,
                  boxes_flow=0.5,
+                 char_margin_for_word=0.01,
                  detect_vertical=False,
                  all_texts=False):
         self.line_overlap = line_overlap
@@ -72,6 +75,7 @@ class LAParams:
         self.boxes_flow = boxes_flow
         self.detect_vertical = detect_vertical
         self.all_texts = all_texts
+        self.char_margin_for_word = char_margin_for_word
 
         self._validate()
         return
@@ -80,8 +84,8 @@ class LAParams:
         if self.boxes_flow is not None:
             boxes_flow_err_msg = ("LAParam boxes_flow should be None, or a "
                                   "number between -1 and +1")
-            if not (isinstance(self.boxes_flow, int) or
-                    isinstance(self.boxes_flow, float)):
+            if not (isinstance(self.boxes_flow, int)
+                    or isinstance(self.boxes_flow, float)):
                 raise TypeError(boxes_flow_err_msg)
             if not -1 <= self.boxes_flow <= 1:
                 raise ValueError(boxes_flow_err_msg)
@@ -95,7 +99,6 @@ class LAParams:
 
 class LTItem:
     """Interface for things that can be analyzed"""
-
     def analyze(self, laparams):
         """Perform the layout analysis."""
         return
@@ -103,10 +106,8 @@ class LTItem:
 
 class LTText:
     """Interface for things that have text"""
-
     def __repr__(self):
-        return ('<%s %r>' %
-                (self.__class__.__name__, self.get_text()))
+        return ('<%s %r>' % (self.__class__.__name__, self.get_text()))
 
     def get_text(self):
         """Text contained in this object"""
@@ -115,15 +116,14 @@ class LTText:
 
 class LTComponent(LTItem):
     """Object with a bounding box"""
-
     def __init__(self, bbox):
         LTItem.__init__(self)
+        bbox = tuple(map(lambda x: round(x, 2) , list(bbox) ))
         self.set_bbox(bbox)
         return
 
     def __repr__(self):
-        return ('<%s %s>' %
-                (self.__class__.__name__, bbox2str(self.bbox)))
+        return ('<%s %s>' % (self.__class__.__name__, bbox2str(self.bbox)))
 
     # Disable comparison.
     def __lt__(self, _):
@@ -144,8 +144,8 @@ class LTComponent(LTItem):
         self.y0 = y0
         self.x1 = x1
         self.y1 = y1
-        self.width = x1-x0
-        self.height = y1-y0
+        self.width = x1 - x0
+        self.height = y1 - y0
         self.bbox = bbox
         return
 
@@ -161,12 +161,12 @@ class LTComponent(LTItem):
         if self.is_hoverlap(obj):
             return 0
         else:
-            return min(abs(self.x0-obj.x1), abs(self.x1-obj.x0))
+            return min(abs(self.x0 - obj.x1), abs(self.x1 - obj.x0))
 
     def hoverlap(self, obj):
         assert isinstance(obj, LTComponent), str(type(obj))
         if self.is_hoverlap(obj):
-            return min(abs(self.x0-obj.x1), abs(self.x1-obj.x0))
+            return min(abs(self.x0 - obj.x1), abs(self.x1 - obj.x0))
         else:
             return 0
 
@@ -179,21 +179,26 @@ class LTComponent(LTItem):
         if self.is_voverlap(obj):
             return 0
         else:
-            return min(abs(self.y0-obj.y1), abs(self.y1-obj.y0))
+            return min(abs(self.y0 - obj.y1), abs(self.y1 - obj.y0))
 
     def voverlap(self, obj):
         assert isinstance(obj, LTComponent), str(type(obj))
         if self.is_voverlap(obj):
-            return min(abs(self.y0-obj.y1), abs(self.y1-obj.y0))
+            return min(abs(self.y0 - obj.y1), abs(self.y1 - obj.y0))
         else:
             return 0
 
 
 class LTCurve(LTComponent):
     """A generic Bezier curve"""
-
-    def __init__(self, linewidth, pts, stroke=False, fill=False, evenodd=False,
-                 stroking_color=None, non_stroking_color=None):
+    def __init__(self,
+                 linewidth,
+                 pts,
+                 stroke=False,
+                 fill=False,
+                 evenodd=False,
+                 stroking_color=None,
+                 non_stroking_color=None):
         LTComponent.__init__(self, get_bound(pts))
         self.pts = pts
         self.linewidth = linewidth
@@ -213,9 +218,15 @@ class LTLine(LTCurve):
 
     Could be used for separating text or figures.
     """
-
-    def __init__(self, linewidth, p0, p1, stroke=False, fill=False,
-                 evenodd=False, stroking_color=None, non_stroking_color=None):
+    def __init__(self,
+                 linewidth,
+                 p0,
+                 p1,
+                 stroke=False,
+                 fill=False,
+                 evenodd=False,
+                 stroking_color=None,
+                 non_stroking_color=None):
         LTCurve.__init__(self, linewidth, [p0, p1], stroke, fill, evenodd,
                          stroking_color, non_stroking_color)
         return
@@ -226,13 +237,18 @@ class LTRect(LTCurve):
 
     Could be used for framing another pictures or figures.
     """
-
-    def __init__(self, linewidth, bbox, stroke=False, fill=False,
-                 evenodd=False, stroking_color=None,  non_stroking_color=None):
+    def __init__(self,
+                 linewidth,
+                 bbox,
+                 stroke=False,
+                 fill=False,
+                 evenodd=False,
+                 stroking_color=None,
+                 non_stroking_color=None):
         (x0, y0, x1, y1) = bbox
-        LTCurve.__init__(self, linewidth,
-                         [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], stroke,
-                         fill, evenodd, stroking_color, non_stroking_color)
+        LTCurve.__init__(self, linewidth, [(x0, y0), (x1, y0), (x1, y1),
+                                           (x0, y1)], stroke, fill, evenodd,
+                         stroking_color, non_stroking_color)
         return
 
 
@@ -241,13 +257,12 @@ class LTImage(LTComponent):
 
     Embedded images can be in JPEG, Bitmap or JBIG2.
     """
-
     def __init__(self, name, stream, bbox):
         LTComponent.__init__(self, bbox)
         self.name = name
         self.stream = stream
-        self.srcsize = (stream.get_any(('W', 'Width')),
-                        stream.get_any(('H', 'Height')))
+        self.srcsize = (stream.get_any(
+            ('W', 'Width')), stream.get_any(('H', 'Height')))
         self.imagemask = stream.get_any(('IM', 'ImageMask'))
         self.bits = stream.get_any(('BPC', 'BitsPerComponent'), 1)
         self.colorspace = stream.get_any(('CS', 'ColorSpace'))
@@ -256,9 +271,8 @@ class LTImage(LTComponent):
         return
 
     def __repr__(self):
-        return ('<%s(%s) %s %r>' %
-                (self.__class__.__name__, self.name,
-                 bbox2str(self.bbox), self.srcsize))
+        return ('<%s(%s) %s %r>' % (self.__class__.__name__, self.name,
+                                    bbox2str(self.bbox), self.srcsize))
 
 
 class LTAnno(LTItem, LTText):
@@ -268,7 +282,6 @@ class LTAnno(LTItem, LTText):
     not, as these are "virtual" characters, inserted by a layout analyzer
     according to the relationship between two characters (e.g. a space).
     """
-
     def __init__(self, text):
         self._text = text
         return
@@ -279,9 +292,8 @@ class LTAnno(LTItem, LTText):
 
 class LTChar(LTComponent, LTText):
     """Actual letter in the text as a Unicode string."""
-
-    def __init__(self, matrix, font, fontsize, scaling, rise,
-                 text, textwidth, textdisp, ncs, graphicstate):
+    def __init__(self, matrix, font, fontsize, scaling, rise, text, textwidth,
+                 textdisp, ncs, graphicstate):
         LTText.__init__(self)
         self._text = text
         self.matrix = matrix
@@ -306,7 +318,7 @@ class LTChar(LTComponent, LTText):
             bbox_lower_left = (0, descent + rise)
             bbox_upper_right = (self.adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = self.matrix
-        self.upright = (0 < a*d*scaling and b*c <= 0)
+        self.upright = (0 < a * d * scaling and b * c <= 0)
         (x0, y0) = apply_matrix_pt(self.matrix, bbox_lower_left)
         (x1, y1) = apply_matrix_pt(self.matrix, bbox_upper_right)
         if x1 < x0:
@@ -315,16 +327,16 @@ class LTChar(LTComponent, LTText):
             (y0, y1) = (y1, y0)
         LTComponent.__init__(self, (x0, y0, x1, y1))
         if font.is_vertical():
-            self.size = self.width
+            self.size = round(self.width, 2)
         else:
-            self.size = self.height
+            self.size = round(self.height, 2)
         return
 
     def __repr__(self):
         return ('<%s %s matrix=%s font=%r adv=%s text=%r>' %
                 (self.__class__.__name__, bbox2str(self.bbox),
-                 matrix2str(self.matrix), self.fontname, self.adv,
-                 self.get_text()))
+                 matrix2str(
+                     self.matrix), self.fontname, self.adv, self.get_text()))
 
     def get_text(self):
         return self._text
@@ -336,7 +348,6 @@ class LTChar(LTComponent, LTText):
 
 class LTContainer(LTComponent):
     """Object that can be extended and analyzed"""
-
     def __init__(self, bbox):
         LTComponent.__init__(self, bbox)
         self._objs = []
@@ -386,64 +397,66 @@ class LTTextContainer(LTExpandableContainer, LTText):
                        if isinstance(obj, LTText))
 
 
-class LTTextLine(LTTextContainer):
+class LTTextWord(LTTextContainer):
     """Contains a list of LTChar objects that represent a single text line.
 
     The characters are aligned either horizontally or vertically, depending on
     the text's writing mode.
     """
-
-    def __init__(self, word_margin):
+    def __init__(self, char_margin_for_word):
         LTTextContainer.__init__(self)
-        self.word_margin = word_margin
+        self.char_margin_for_word = char_margin_for_word
+        self.fontname = ""
+        self.fontsize = 0
+        self.num_of_chars = 0
+        self.nature = ""
+        self.type = ""
         return
 
     def __repr__(self):
-        return ('<%s %s %r>' %
-                (self.__class__.__name__, bbox2str(self.bbox),
-                 self.get_text()))
+        return (
+            '<%s %s %r>' %
+            (self.__class__.__name__, bbox2str(self.bbox), self.get_text()))
 
     def analyze(self, laparams):
         LTTextContainer.analyze(self, laparams)
-        LTContainer.add(self, LTAnno('\n'))
+        # LTContainer.add(self, LTAnno('\n'))
         return
 
     def find_neighbors(self, plane, ratio):
         raise NotImplementedError
 
+    def is_compatible(self, obj):
+        """Returns True if two characters can coexist in the same line."""
+        return True
+    
 
-class LTTextLineHorizontal(LTTextLine):
-    def __init__(self, word_margin):
-        LTTextLine.__init__(self, word_margin)
+class LTTextWordHorizontal(LTTextWord):
+    def __init__(self, char_margin_for_word):
+        LTTextWord.__init__(self, char_margin_for_word)
         self._x1 = +INF
         return
 
     def add(self, obj):
-        if isinstance(obj, LTChar) and self.word_margin:
-            margin = self.word_margin * max(obj.width, obj.height)
-            if self._x1 < obj.x0 - margin:
-                LTContainer.add(self, LTAnno(' '))
+        # if isinstance(obj, LTChar):
+        # margin = self.char_margin * max(obj.width, obj.height)
+        # if self._x1 < obj.x0 - margin:
+        # LTContainer.add(self, LTAnno(' '))
         self._x1 = obj.x1
-        LTTextLine.add(self, obj)
+        self.num_of_chars += 1
+            
+        
+        if self.num_of_chars <=2:
+            self.fontsize = round(obj.size, 1)
+        
+        if self.fontname == "":
+            self.fontname = obj.fontname
+        
+        if self.nature == "" and obj.get_text() == ":":
+            self.nature = "form"
+
+        LTTextWord.add(self, obj)
         return
-
-    def find_neighbors(self, plane, ratio):
-        """
-        Finds neighboring LTTextLineHorizontals in the plane.
-
-        Returns a list of other LTTestLineHorizontals in the plane which are
-        close to self. "Close" can be controlled by ratio. The returned objects
-        will be the same height as self, and also either left-, right-, or
-        centrally-aligned.
-        """
-        d = ratio * self.height
-        objs = plane.find((self.x0, self.y0 - d, self.x1, self.y1 + d))
-        return [obj for obj in objs
-                if (isinstance(obj, LTTextLineHorizontal) and
-                    self._is_same_height_as(obj, tolerance=d) and
-                    (self._is_left_aligned_with(obj, tolerance=d) or
-                     self._is_right_aligned_with(obj, tolerance=d) or
-                     self._is_centrally_aligned_with(obj, tolerance=d)))]
 
     def _is_left_aligned_with(self, other, tolerance=0):
         """
@@ -461,26 +474,31 @@ class LTTextLineHorizontal(LTTextLine):
         """
         Whether the horizontal center of `other` is within `tolerance`.
         """
-        return abs(
-            (other.x0 + other.x1) / 2 - (self.x0 + self.x1) / 2) <= tolerance
+        return abs((other.x0 + other.x1) / 2 -
+                   (self.x0 + self.x1) / 2) <= tolerance
 
     def _is_same_height_as(self, other, tolerance):
         return abs(other.height - self.height) <= tolerance
 
 
-class LTTextLineVertical(LTTextLine):
-    def __init__(self, word_margin):
-        LTTextLine.__init__(self, word_margin)
+class LTTextWordVertical(LTTextWord):
+    def __init__(self, char_margin_for_word):
+        LTTextWord.__init__(self, char_margin_for_word)
         self._y0 = -INF
         return
 
     def add(self, obj):
-        if isinstance(obj, LTChar) and self.word_margin:
-            margin = self.word_margin * max(obj.width, obj.height)
-            if obj.y1 + margin < self._y0:
-                LTContainer.add(self, LTAnno(' '))
+        # if isinstance(obj, LTChar) and self.word_margin:
+        #     margin = self.word_margin * max(obj.width, obj.height)
+        #     if obj.y1 + margin < self._y0:
+        #         LTContainer.add(self, LTAnno(' '))
         self._y0 = obj.y0
-        LTTextLine.add(self, obj)
+        self.num_of_chars += 1
+        if self.num_of_chars <=2:
+            self.fontsize = round(obj.size, 1)
+        if self.fontname == "":
+            self.fontname = obj.fontname
+        LTTextWord.add(self, obj)
         return
 
     def find_neighbors(self, plane, ratio):
@@ -494,12 +512,14 @@ class LTTextLineVertical(LTTextLine):
         """
         d = ratio * self.width
         objs = plane.find((self.x0 - d, self.y0, self.x1 + d, self.y1))
-        return [obj for obj in objs
-                if (isinstance(obj, LTTextLineVertical) and
-                    self._is_same_width_as(obj, tolerance=d) and
-                    (self._is_lower_aligned_with(obj, tolerance=d) or
-                     self._is_upper_aligned_with(obj, tolerance=d) or
-                     self._is_centrally_aligned_with(obj, tolerance=d)))]
+        return [
+            obj for obj in objs
+            if (isinstance(obj, LTTextLineVertical)
+                and self._is_same_width_as(obj, tolerance=d) and (
+                    self._is_lower_aligned_with(obj, tolerance=d)
+                    or self._is_upper_aligned_with(obj, tolerance=d)
+                    or self._is_centrally_aligned_with(obj, tolerance=d)))
+        ]
 
     def _is_lower_aligned_with(self, other, tolerance=0):
         """
@@ -517,8 +537,229 @@ class LTTextLineVertical(LTTextLine):
         """
         Whether the vertical center of `other` is within `tolerance`.
         """
-        return abs(
-            (other.y0 + other.y1) / 2 - (self.y0 + self.y1) / 2) <= tolerance
+        return abs((other.y0 + other.y1) / 2 -
+                   (self.y0 + self.y1) / 2) <= tolerance
+
+    def _is_same_width_as(self, other, tolerance):
+        return abs(other.width - self.width) <= tolerance
+
+
+class LTTextLine(LTTextContainer):
+    """Contains a list of LTChar objects that represent a single text line.
+
+    The characters are aligned either horizontally or vertically, depending on
+    the text's writing mode.
+    """
+    def __init__(self, word_margin):
+        LTTextContainer.__init__(self)
+        self.word_margin = word_margin
+        self.fontsize = 0
+        self.fontname = ""
+        self.nature = ""
+        self.type = ""
+        return
+
+    def __repr__(self):
+        return (
+            '<%s %s %r>' %
+            (self.__class__.__name__, bbox2str(self.bbox), self.get_text()))
+
+    def analyze(self, laparams):
+        LTTextContainer.analyze(self, laparams)
+        LTContainer.add(self, LTAnno('\n'))
+        return
+
+    def find_neighbors(self, plane, ratio):
+        raise NotImplementedError
+
+    def is_date(self, date_string):
+        regex = re.compile(':')
+        
+        if "cr" in date_string.lower() or "dr" in date_string.lower() or date_string.lower().startswith(("/","-",":",";",",")):
+            return None
+        try:
+            check = float(date_string)
+            
+            return None
+        except:
+            pass
+        
+        if regex.search(date_string) != None:
+            
+            return None
+        
+        if len(date_string) < 6 or len(date_string) >12:
+            return None
+        date_string = str(date_string)
+        if not date_string:
+            return None
+        if "-" or "/" in date_string:
+            # "date_with_special_chars"
+            date_string = date_string.replace(" -", "-")
+            date_string = date_string.replace("- ", "-")
+            date_string = date_string.replace("/ ", "-")
+            date_string = date_string.replace(" /", "-")
+            date_string = date_string.replace("/", "-")
+        else:
+            date_type = "date_in_english"
+            # Replace some similar numbers in OCR
+        try:
+            input_date = parser.parse(date_string, dayfirst=True)
+            input_date = str(input_date).split()[0]
+            return input_date
+        except:
+            return None
+        
+    def is_header(self, input):
+        mappings = pd.read_csv("/home/mahender/anaconda3/lib/python3.8/site-packages/custom_pdfminer/Mapping_BS_fields.csv")
+        mappings["small_Key"] = mappings["Key"].str.lower()
+        mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
+        
+        if input.lower() in list(mappings["small_Key"]):
+            return True
+        
+        return False
+
+
+class LTTextLineHorizontal(LTTextLine):
+    def __init__(self, word_margin):
+        LTTextLine.__init__(self, word_margin)
+        self._x1 = +INF
+        return
+
+    def add(self, obj):
+        if isinstance(obj, LTChar) and self.word_margin:
+            margin = self.word_margin * max(obj.width, obj.height)
+            if self._x1 < obj.x0 - margin:
+                LTContainer.add(self, LTAnno(' '))
+        self._x1 = obj.x1
+
+        if self.nature == "" and obj.nature == "form":
+            self.nature = "form"
+        
+        if self.is_date(obj.get_text()):
+            obj.type = "date"
+        if self.is_header(obj.get_text()):
+            obj.type = "header"
+
+        if self.fontsize < obj.fontsize:
+            self.fontsize = obj.fontsize
+        if self.fontname == "":
+            self.fontname = obj.fontname
+        LTTextLine.add(self, obj)
+        return
+
+    def find_neighbors(self, plane, ratio):
+        """
+        Finds neighboring LTTextLineHorizontals in the plane.
+
+        Returns a list of other LTTestLineHorizontals in the plane which are
+        close to self. "Close" can be controlled by ratio. The returned objects
+        will be the same height as self, and also either left-, right-, or
+        centrally-aligned.
+        """
+        custom_ratio = 0.25
+        d = custom_ratio * self.height
+        objs = plane.find((self.x0, self.y0 - d, self.x1, self.y1 + d))
+        return [
+            obj for obj in objs
+            if (isinstance(obj, LTTextLineHorizontal)
+                and self._is_same_height_as(obj, tolerance=d) and (
+                    self._is_left_aligned_with(obj, tolerance=d)
+                    or self._is_right_aligned_with(obj, tolerance=d)
+                    or self._is_centrally_aligned_with(obj, tolerance=d)))
+        ]
+
+    def _is_left_aligned_with(self, other, tolerance=0):
+        """
+        Whether the left-hand edge of `other` is within `tolerance`.
+        """
+        return abs(other.x0 - self.x0) <= tolerance
+
+    def _is_right_aligned_with(self, other, tolerance=0):
+        """
+        Whether the right-hand edge of `other` is within `tolerance`.
+        """
+        return abs(other.x1 - self.x1) <= tolerance
+
+    def _is_centrally_aligned_with(self, other, tolerance=0):
+        """
+        Whether the horizontal center of `other` is within `tolerance`.
+        """
+        return abs((other.x0 + other.x1) / 2 -
+                   (self.x0 + self.x1) / 2) <= tolerance
+
+    def _is_same_height_as(self, other, tolerance):
+        return abs(other.height - self.height) <= tolerance
+
+
+class LTTextLineVertical(LTTextLine):
+    def __init__(self, word_margin):
+        LTTextLine.__init__(self, word_margin)
+        self._y0 = -INF
+        return
+
+    def add(self, obj):
+        if isinstance(obj, LTChar) and self.word_margin:
+            margin = self.word_margin * max(obj.width, obj.height)
+            if obj.y1 + margin < self._y0:
+                LTContainer.add(self, LTAnno(' '))
+        self._y0 = obj.y0
+
+        if self.nature == "" and obj.nature == "form":
+            self.nature = "form"
+
+        if self.is_date(obj.get_text()):
+            obj.type = "date"
+        if self.is_header(obj.get_text()):
+            obj.type = "header"
+
+        if self.fontsize < obj.fontsize:
+            self.fontsize = obj.fontsize
+        if self.fontname == "":
+            self.fontname = obj.fontname
+
+        LTTextLine.add(self, obj)
+        return
+
+    def find_neighbors(self, plane, ratio):
+        """
+        Finds neighboring LTTextLineVerticals in the plane.
+
+        Returns a list of other LTTextLineVerticals in the plane which are
+        close to self. "Close" can be controlled by ratio. The returned objects
+        will be the same width as self, and also either upper-, lower-, or
+        centrally-aligned.
+        """
+        d = ratio * self.width
+        objs = plane.find((self.x0 - d, self.y0, self.x1 + d, self.y1))
+        return [
+            obj for obj in objs
+            if (isinstance(obj, LTTextLineVertical)
+                and self._is_same_width_as(obj, tolerance=d) and (
+                    self._is_lower_aligned_with(obj, tolerance=d)
+                    or self._is_upper_aligned_with(obj, tolerance=d)
+                    or self._is_centrally_aligned_with(obj, tolerance=d)))
+        ]
+
+    def _is_lower_aligned_with(self, other, tolerance=0):
+        """
+        Whether the lower edge of `other` is within `tolerance`.
+        """
+        return abs(other.y0 - self.y0) <= tolerance
+
+    def _is_upper_aligned_with(self, other, tolerance=0):
+        """
+        Whether the upper edge of `other` is within `tolerance`.
+        """
+        return abs(other.y1 - self.y1) <= tolerance
+
+    def _is_centrally_aligned_with(self, other, tolerance=0):
+        """
+        Whether the vertical center of `other` is within `tolerance`.
+        """
+        return abs((other.y0 + other.y1) / 2 -
+                   (self.y0 + self.y1) / 2) <= tolerance
 
     def _is_same_width_as(self, other, tolerance):
         return abs(other.width - self.width) <= tolerance
@@ -531,16 +772,19 @@ class LTTextBox(LTTextContainer):
     necessarily represents a logical boundary of the text. It contains a list
     of LTTextLine objects.
     """
-
     def __init__(self):
         LTTextContainer.__init__(self)
         self.index = -1
+        self.type = ""
         return
 
     def __repr__(self):
-        return ('<%s(%s) %s %r>' %
-                (self.__class__.__name__,
-                 self.index, bbox2str(self.bbox), self.get_text()))
+        return ('<%s(%s) %s %r>' % (self.__class__.__name__, self.index,
+                                    bbox2str(self.bbox), self.get_text()))
+
+    def get_text(self):
+        return ' '.join(obj.get_text() for obj in self
+                       if isinstance(obj, LTText))
 
 
 class LTTextBoxHorizontal(LTTextBox):
@@ -574,9 +818,8 @@ class LTTextGroupLRTB(LTTextGroup):
     def analyze(self, laparams):
         LTTextGroup.analyze(self, laparams)
         # reorder the objects from top-left to bottom-right.
-        self._objs.sort(
-            key=lambda obj: (1 - laparams.boxes_flow) * obj.x0
-            - (1 + laparams.boxes_flow) * (obj.y0 + obj.y1))
+        self._objs.sort(key=lambda obj: (1 - laparams.boxes_flow) * obj.x0 -
+                        (1 + laparams.boxes_flow) * (obj.y0 + obj.y1))
         return
 
 
@@ -584,9 +827,8 @@ class LTTextGroupTBRL(LTTextGroup):
     def analyze(self, laparams):
         LTTextGroup.analyze(self, laparams)
         # reorder the objects from top-right to bottom-left.
-        self._objs.sort(
-            key=lambda obj: - (1 + laparams.boxes_flow) * (obj.x0 + obj.x1)
-                            - (1 - laparams.boxes_flow) * obj.y1)
+        self._objs.sort(key=lambda obj: -(1 + laparams.boxes_flow) *
+                        (obj.x0 + obj.x1) - (1 - laparams.boxes_flow) * obj.y1)
         return
 
 
@@ -595,7 +837,50 @@ class LTLayoutContainer(LTContainer):
         LTContainer.__init__(self, bbox)
         self.groups = None
         return
+    def is_date(self, date_string):
+        
+        # print("date: ",date_string)
+        regex = re.compile(':')
+        if "cr" in date_string.lower() or "dr" in date_string.lower():
+            return None
+        try:
+            check = float(date_string)
+            return None
+        except:
+            pass
 
+        if regex.search(date_string) != None:
+            return None
+        
+        if len(date_string) < 6 or len(date_string) >12:
+            return None
+        date_string = str(date_string)
+        if not date_string:
+            return None
+        if "-" or "/" in date_string:
+            # "date_with_special_chars"
+
+            date_string = date_string.replace(" ", "")
+            date_string = date_string.replace("/", "-")
+        else:
+            date_type = "date_in_english"
+            # Replace some similar numbers in OCR
+        try:
+            input_date = parser.parse(date_string, dayfirst=True)
+            input_date = str(input_date).split()[0]
+            return input_date
+        except:
+            # input_date = parser.parse(date_string)
+            return None
+    def is_header(self, input):
+        mappings = pd.read_csv("/home/mahender/anaconda3/lib/python3.8/site-packages/custom_pdfminer/Mapping_BS_fields.csv")
+        mappings["small_Key"] = mappings["Key"].str.lower()
+        mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
+        
+        if input.lower() in list(mappings["small_Key"]):
+            return True
+        
+        return False
     # group_objects: group text object to textlines.
     def group_objects(self, laparams, objs):
         obj0 = None
@@ -618,7 +903,7 @@ class LTLayoutContainer(LTContainer):
                     and min(obj0.height, obj1.height) * laparams.line_overlap \
                     < obj0.voverlap(obj1) \
                     and obj0.hdistance(obj1) \
-                    < max(obj0.width, obj1.width) * laparams.char_margin
+                    < min(obj0.width, obj1.width) * (laparams.char_margin/3)
 
                 # valign: obj0 and obj1 is vertically aligned.
                 #
@@ -641,10 +926,10 @@ class LTLayoutContainer(LTContainer):
                     and min(obj0.width, obj1.width) * laparams.line_overlap \
                     < obj0.hoverlap(obj1) \
                     and obj0.vdistance(obj1) \
-                    < max(obj0.height, obj1.height) * laparams.char_margin
+                    < max(obj0.height, obj1.height) * (laparams.char_margin/3)
 
-                if ((halign and isinstance(line, LTTextLineHorizontal)) or
-                        (valign and isinstance(line, LTTextLineVertical))):
+                if ((halign and isinstance(line, LTTextLineHorizontal))
+                        or (valign and isinstance(line, LTTextLineVertical))):
 
                     line.add(obj1)
                 elif line is not None:
@@ -668,12 +953,15 @@ class LTLayoutContainer(LTContainer):
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
             line.add(obj0)
+        
         yield line
         return
 
     def group_textlines(self, laparams, lines):
         """Group neighboring lines to textboxes"""
         plane = Plane(self.bbox)
+        # pprint(lines)
+        # print("end")
         plane.extend(lines)
         boxes = {}
         for line in lines:
@@ -720,7 +1008,6 @@ class LTLayoutContainer(LTContainer):
         :param boxes: All textbox objects to be grouped.
         :return: a list that has only one element, the final top level textbox.
         """
-
         def dist(obj1, obj2):
             """A distance function between two TextBoxes.
 
@@ -752,10 +1039,10 @@ class LTLayoutContainer(LTContainer):
         dists = []
         for i in range(len(boxes)):
             obj1 = boxes[i]
-            for j in range(i+1, len(boxes)):
+            for j in range(i + 1, len(boxes)):
                 obj2 = boxes[j]
-                dists.append((False, dist(obj1, obj2), id(obj1), id(obj2),
-                              obj1, obj2))
+                dists.append(
+                    (False, dist(obj1, obj2), id(obj1), id(obj2), obj1, obj2))
         heapq.heapify(dists)
 
         plane = Plane(self.bbox)
@@ -778,11 +1065,98 @@ class LTLayoutContainer(LTContainer):
                 done.update([id1, id2])
 
                 for other in plane:
-                    heapq.heappush(dists, (False, dist(group, other),
-                                           id(group), id(other), group, other))
+                    heapq.heappush(dists, (False, dist(
+                        group, other), id(group), id(other), group, other))
                 plane.add(group)
         return list(plane)
 
+    def group_textchars(self, laparams, objs):
+        obj0 = None
+        word = None
+        for obj1 in objs:
+            if obj0 is not None:
+                # halign: obj0 and obj1 is horizontally aligned.
+                #
+                #   +------+ - - -
+                #   | obj0 | - - +------+   -
+                #   |      |     | obj1 |   | (line_overlap)
+                #   +------+ - - |      |   -
+                #          - - - +------+
+                #
+                #          |<--->|
+                #        (char_margin)
+                halign = \
+                    obj0.is_compatible(obj1) \
+                    and obj0.is_voverlap(obj1) \
+                    and min(obj0.height, obj1.height) * laparams.line_overlap \
+                    < obj0.voverlap(obj1) \
+                    and obj0.hdistance(obj1) \
+                    < max(obj0.width, obj1.width) * laparams.char_margin_for_word
+
+                # valign: obj0 and obj1 is vertically aligned.
+                #
+                #   +------+
+                #   | obj0 |
+                #   |      |
+                #   +------+ - - -
+                #     |    |     | (char_margin)
+                #     +------+ - -
+                #     | obj1 |
+                #     |      |
+                #     +------+
+                #
+                #     |<-->|
+                #   (line_overlap)
+                valign = \
+                    laparams.detect_vertical \
+                    and obj0.is_compatible(obj1) \
+                    and obj0.is_hoverlap(obj1) \
+                    and min(obj0.width, obj1.width) * laparams.line_overlap \
+                    < obj0.hoverlap(obj1) \
+                    and obj0.vdistance(obj1) \
+                    < max(obj0.height, obj1.height) * laparams.char_margin_for_word
+                
+                if halign and isinstance(
+                        word, LTTextWordHorizontal
+                ) and obj1.get_text() != " " and obj1.get_text() != "\n":
+                    word.add(obj1)
+                elif word is not None:
+
+                    yield word
+                    word = None
+                else:
+                    if valign and not halign:
+                        
+                        word = LTTextWordVertical(
+                            laparams.char_margin_for_word)
+                        if obj0.get_text() != " " and obj0.get_text() != "\n":
+                            word.add(obj0)
+                        if obj1.get_text() != " " and obj1.get_text() != "\n":
+                            word.add(obj1)
+                    
+                    elif halign and not valign:
+                        word = LTTextWordHorizontal(
+                            laparams.char_margin_for_word)
+                        if obj0.get_text() != " " and obj0.get_text() != "\n":
+                            word.add(obj0)
+                        if obj1.get_text() != " " and obj1.get_text() != "\n":
+                            word.add(obj1)
+                    else:
+                        word = LTTextWordHorizontal(
+                            laparams.char_margin_for_word)
+                        if obj1.get_text() != " " and obj1.get_text() != "\n":
+                            word.add(obj0)
+                        yield word
+                        word = None
+            obj0 = obj1
+        if word is None:
+            word = LTTextWordHorizontal(laparams.char_margin_for_word)
+            word.add(obj0)
+
+        yield word
+        return
+    def customY(self,word):
+        return -word.bbox[1]
     def analyze(self, laparams):
         # textobjs is a list of LTChar objects, i.e.
         # it has all the individual characters in the page.
@@ -792,11 +1166,29 @@ class LTLayoutContainer(LTContainer):
             obj.analyze(laparams)
         if not textobjs:
             return
-        textlines = list(self.group_objects(laparams, textobjs))
+        textwords = list(self.group_textchars(laparams, textobjs))
+        textlines = list(self.group_objects(laparams, textwords))
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
+        
         for obj in empties:
             obj.analyze(laparams)
         textboxes = list(self.group_textlines(laparams, textlines))
+        for temp_box in textboxes:
+            temp_words = list()
+            for line in temp_box:
+                if isinstance(line, LTTextLine):
+                    for word in line:
+                        if isinstance(word, LTTextWord):
+                            temp_words.append(word)
+            
+            temp_words.sort(key=self.customY)
+            test_string = ""
+            for obj in temp_words:
+                test_string += obj.get_text()
+            if self.is_date(test_string):
+                temp_box.type = "date"
+            if self.is_header(test_string):
+                temp_box.type = "header"
         if laparams.boxes_flow is None:
             for textbox in textboxes:
                 textbox.analyze(laparams)
@@ -806,6 +1198,7 @@ class LTLayoutContainer(LTContainer):
                     return (0, -box.x1, -box.y0)
                 else:
                     return (1, -box.y0, box.x0)
+
             textboxes.sort(key=getkey)
         else:
             self.groups = self.group_textboxes(laparams, textboxes)
@@ -825,7 +1218,6 @@ class LTFigure(LTLayoutContainer):
     another PDF document within a page. Note that LTFigure objects can appear
     recursively.
     """
-
     def __init__(self, name, bbox, matrix):
         self.name = name
         self.matrix = matrix
@@ -837,8 +1229,8 @@ class LTFigure(LTLayoutContainer):
 
     def __repr__(self):
         return ('<%s(%s) %s matrix=%s>' %
-                (self.__class__.__name__, self.name,
-                 bbox2str(self.bbox), matrix2str(self.matrix)))
+                (self.__class__.__name__, self.name, bbox2str(
+                    self.bbox), matrix2str(self.matrix)))
 
     def analyze(self, laparams):
         if not laparams.all_texts:
@@ -853,7 +1245,6 @@ class LTPage(LTLayoutContainer):
     May contain child objects like LTTextBox, LTFigure, LTImage, LTRect,
     LTCurve and LTLine.
     """
-
     def __init__(self, pageid, bbox, rotate=0):
         LTLayoutContainer.__init__(self, bbox)
         self.pageid = pageid
@@ -862,5 +1253,5 @@ class LTPage(LTLayoutContainer):
 
     def __repr__(self):
         return ('<%s(%r) %s rotate=%r>' %
-                (self.__class__.__name__, self.pageid,
-                 bbox2str(self.bbox), self.rotate))
+                (self.__class__.__name__, self.pageid, bbox2str(
+                    self.bbox), self.rotate))

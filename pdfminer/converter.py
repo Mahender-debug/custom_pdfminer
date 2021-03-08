@@ -1,4 +1,3 @@
-import io
 import logging
 import re
 import sys
@@ -10,6 +9,7 @@ from .layout import LTText
 from .layout import LTLine
 from .layout import LTRect
 from .layout import LTCurve
+from .layout import LTTextWord
 from .layout import LTFigure
 from .layout import LTImage
 from .layout import LTChar
@@ -168,22 +168,24 @@ class PDFConverter(PDFLayoutAnalyzer):
                                    laparams=laparams)
         self.outfp = outfp
         self.codec = codec
-        self.outfp_binary = self._is_binary_stream(self.outfp)
-
-    @staticmethod
-    def _is_binary_stream(outfp):
-        """Test if an stream is binary or not"""
-        if 'b' in getattr(outfp, 'mode', ''):
-            return True
-        elif hasattr(outfp, 'mode'):
-            # output stream has a mode, but it does not contain 'b'
-            return False
-        elif isinstance(outfp, io.BytesIO):
-            return True
-        elif isinstance(outfp, io.StringIO):
-            return False
-
-        return True
+        if hasattr(self.outfp, 'mode'):
+            if 'b' in self.outfp.mode:
+                self.outfp_binary = True
+            else:
+                self.outfp_binary = False
+        else:
+            import io
+            if isinstance(self.outfp, io.BytesIO):
+                self.outfp_binary = True
+            elif isinstance(self.outfp, io.StringIO):
+                self.outfp_binary = False
+            else:
+                try:
+                    self.outfp.write("é")
+                    self.outfp_binary = False
+                except TypeError:
+                    self.outfp_binary = True
+        return
 
 
 class TextConverter(PDFConverter):
@@ -542,31 +544,55 @@ class XMLConverter(PDFConverter):
                 for child in item:
                     render(child)
                 self.write('</figure>\n')
-            elif isinstance(item, LTTextLine):
-                self.write('<textline bbox="%s">\n' % bbox2str(item.bbox))
+            elif isinstance(item, LTTextWord):
+                word = ""
                 for child in item:
-                    render(child)
-                self.write('</textline>\n')
+                    # render(child)
+                    word += child.get_text()
+                    
+                self.write('\t\t<textword xleft="%s" xright="%s" ytop="%s" ybottom="%s" style="%s:%s" nature="%s" type="%s" >' % (item.bbox[0], item.bbox[2],item.bbox[1],item.bbox[3], item.fontname, item.fontsize, item.nature, item.type))
+                self.write(word)
+                self.write('</textword>\n')
+            
+            elif isinstance(item, LTTextLine):
+                self.write('\t<textline xleft="%s" xright="%s" ytop="%s" ybottom="%s" style="%s:%s" nature="%s" >\n' % (item.bbox[0], item.bbox[2],item.bbox[1],item.bbox[3], item.fontname, item.fontsize, item.nature))
+                for child in item:
+                    render(child)                
+                self.write('\t</textline>\n')
             elif isinstance(item, LTTextBox):
                 wmode = ''
                 if isinstance(item, LTTextBoxVertical):
                     wmode = ' wmode="vertical"'
-                s = '<textbox id="%d" bbox="%s"%s>\n' %\
-                    (item.index, bbox2str(item.bbox), wmode)
+                
+                fontname = ""
+                fontsize = 0
+                nature = ""
+                for child in item:
+                    if fontname == "":
+                        fontname = child.fontname
+                    if fontsize < child.fontsize:
+                        fontsize = child.fontsize
+                    if nature == "" and child.nature != "":
+                        nature = child.nature
+                    
+                s = '<textbox id="%d" xleft="%s" xright="%s" ytop="%s" ybottom="%s" style="%s:%s" nature="%s" %s>\n' %\
+                    (item.index, item.bbox[0], item.bbox[2],item.bbox[1],item.bbox[3], fontname, fontsize, nature, wmode)
                 self.write(s)
                 for child in item:
                     render(child)
                 self.write('</textbox>\n')
             elif isinstance(item, LTChar):
-                s = '<text font="%s" bbox="%s" colourspace="%s" ' \
-                    'ncolour="%s" size="%.3f">' % \
-                    (enc(item.fontname), bbox2str(item.bbox),
-                     item.ncs.name, item.graphicstate.ncolor, item.size)
-                self.write(s)
-                self.write_text(item.get_text())
-                self.write('</text>\n')
+                pass
+                # s = '<text font="%s" bbox="%s" colourspace="%s" ' \
+                #     'ncolour="%s" size="%.3f">' % \
+                #     (enc(item.fontname), bbox2str(item.bbox),
+                #      item.ncs.name, item.graphicstate.ncolor, item.size)
+                # self.write(s)
+                # self.write_text(item.get_text())
+                # self.write('</text>\n')
             elif isinstance(item, LTText):
-                self.write('<text>%s</text>\n' % item.get_text())
+                pass
+                # self.write('<text>%s</text>\n' % item.get_text())
             elif isinstance(item, LTImage):
                 if self.imagewriter is not None:
                     name = self.imagewriter.export_image(item)

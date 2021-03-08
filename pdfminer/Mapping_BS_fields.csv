@@ -1,0 +1,176 @@
+Key,Value
+DATE,txnDate
+Date,txnDate
+Tran Date,txnDate
+Transaction Date,txnDate
+Transactions Date,txnDate
+DT,txnDate
+Txn Date,txnDate
+Value Date,txnDate
+withdrawal(dr)/deposit(cr),amount
+Transactio n Date,txnDate
+TRAN DATE,txnDate
+Txn Posted Date,txnDate
+Post Date,txnDate
+DATE VALUE DATE,txnDate
+Date (Value Date),txnDate
+GL Date,txnDate
+Tran. Date,txnDate
+Transactio in Date,txnDate
+TRAN DT,txnDate
+Posting Date,txnDate
+Entry Date,txnDate
+PARTICULARS,narration
+NARRATION,narration
+Transactio in Remarks,narration
+Description,narration
+Transaction Particulars,narration
+Particulars,narration
+Transactio n Remarks,narration
+Transaction Details,narration
+Narration,narration
+DESCRIPTION,narration
+Remarks,narration
+Remark,narration
+Transaction Remarks,narration
+TRANSACTION DETAILS,narration
+Details,narration
+NARATION,narration
+Transaction Description,narration
+Tran Particulars,narration
+Account Description,narration
+CHQ. NO,chequeNo
+CHQ. NO.,chequeNo
+Cheque No,chequeNo
+Chq/Refnumber,chequeNo
+Chq No,chequeNo
+Ref. No,chequeNo
+Chq./Ref.No.,chequeNo
+Chq / Ref number,chequeNo
+Chq/Ref No,chequeNo
+Instr. No.,chequeNo
+INST NO,chequeNo
+ChequeNo.,chequeNo
+Ref/Cheque,chequeNo
+Cheque / Ref No.,chequeNo
+Chq.No,chequeNo
+Cheque Number,chequeNo
+Chq.No.,chequeNo
+Chq.I .No,chequeNo
+CHQ.NO.,chequeNo
+Instrument ID,chequeNo
+Ref No./Cheque No.,chequeNo
+Chq. No.,chequeNo
+Ref / Cheque No.,chequeNo
+Cheque,chequeNo
+Instrument,chequeNo
+CHQ NO,chequeNo
+Instrmnt Number,chequeNo
+Chq. no,chequeNo
+CHO.NO,chequeNo
+Chq Ref number,chequeNo
+Cheque Details,chequeNo
+Cheque No.,chequeNo
+Instrument No.,chequeNo
+Instruments,chequeNo
+Ref,chequeNo
+Chq. No,chequeNo
+ChequeNo,chequeNo
+CHQ,chequeNo
+Chq No.,chequeNo
+REF/CHQ NO,chequeNo
+Reference Number,chequeNo
+Intrument number,chequeNo
+CHQNo,chequeNo
+Instrument Number,chequeNo
+Chq/ Ref No,chequeNo
+Cheque/Reference No,chequeNo
+Cheque#,chequeNo
+Inst.Num,chequeNo
+CHEQUE NO,chequeNo
+Instr No.,chequeNo
+WITHDRAWLS,debit_amount
+WITHDRAWAL (DR),debit_amount
+Deposit(INR),credit_amount
+Deposits(INR),credit_amount
+Withdrawal(INR),debit_amount
+Withdrawals(INR),debit_amount
+Debit,debit_amount
+Amount(INR),amount
+Amount,amount
+Amount (In Rs.),amount
+Withdrawal Amt.,debit_amount
+WithDrawal,debit_amount
+Withdrawal (Dr),debit_amount
+Withdrawal (Dr)/Deposit (Cr),debit_amount
+Debits,debit_amount
+DEBITS,debit_amount
+Withdrawal (in Rs.),debit_amount
+Transaction Amount(INR),amount
+Transaction Amount(INR,amount
+Withdrawals,debit_amount
+Debit Amount,debit_amount
+WITHDRAWAL AMT,debit_amount
+Withdrawal,debit_amount
+Withdra,debit_amount
+DEBIT,debit_amount
+Transaction Debit Amount,debit_amount
+Trxn Amount,amount
+Amount(INR,amount
+Amount (INR),amount
+Debit Amt.,debit_amount
+Dr Amount,debit_amount
+WITHDRAWALS,debit_amount
+debit,debit_amount
+Debit (Rs.),debit_amount
+DR,debit_amount
+Debit Amount in (INR),debit_amount
+Withdraw,debit_amount
+DEPOSIT (CR),credit_amount
+Deposit Amt.,credit_amount
+Deposit (Cr),credit_amount
+Deposits (in Rs.),credit_amount
+Credit Amount,credit_amount
+DEPOSIT AMT,credit_amount
+Transaction Credit Amount,credit_amount
+Credit Amt.,credit_amount
+Cr Amount,credit_amount
+CREDIT,credit_amount
+DEPOSITS,credit_amount
+CR,credit_amount
+Credit (Rs.),credit_amount
+Credit Amount in (INR),credit_amount
+Deposit,credit_amount
+CREDITS,credit_amount
+Credits,credit_amount
+Deposits,credit_amount
+Credit,credit_amount
+Balance (In Rs.),balance
+Closing Balance,balance
+Balance (in Rs.),balance
+Balance 13,balance
+Balance(INR,balance
+Balance( (IN R),balance
+Balance(IN R),balance
+Available Balance(INR),balance
+BALANCE AMT,balance
+Balance (INR),balance
+Bal.,balance
+Total Amount Dr/Cr,balance
+Total Amount,balance
+Balance(INR),balance
+Account Balance,balance
+Balance Amount,balance
+Balance (Rs.),balance
+Balance in (INR),balance
+BALANCE,balance
+Balance,balance
+DR/CR,txnCategory
+Dr/Cr Dr,txnCategory
+DR|CR,txnCategory
+Dr / Cr,txnCategory
+Cr/Dr,txnCategory
+CR/DR,txnCategory
+Dr/Cr,txnCategory
+Tran Type,txnType
+Type,txnType
