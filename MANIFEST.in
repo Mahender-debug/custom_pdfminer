@@ -3,8 +3,9 @@ include LICENSE
 include *.txt
 include *.md
 include *.py
+include *.csv
 graft cmaprsrc
-graft pdfminer
+graft custom_pdfminer
 graft tools
 global-exclude *.pyc
 prune samples

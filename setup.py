@@ -11,7 +11,8 @@ setup(
     name='pdfminer.six',
     version=package.__version__,
     packages=['custom_pdfminer'],
-    package_data={'customer_pdfminer': ['cmap/*.pickle.gz']},
+    package_data={'custom_pdfminer': ['cmap/*.pickle.gz'],
+                    'custom_pdfminer': ['/*.csv'] },
     install_requires=[
         'chardet ; python_version > "3.0"',
         'cryptography',
