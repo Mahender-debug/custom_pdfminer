@@ -1,7 +1,7 @@
 from setuptools import setup
 from os import path
 
-import pdfminer as package
+import custom_pdfminer as package
 
 
 with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
@@ -10,8 +10,8 @@ with open(path.join(path.abspath(path.dirname(__file__)), 'README.md')) as f:
 setup(
     name='pdfminer.six',
     version=package.__version__,
-    packages=['pdfminer'],
-    package_data={'pdfminer': ['cmap/*.pickle.gz']},
+    packages=['custom_pdfminer'],
+    package_data={'customer_pdfminer': ['cmap/*.pickle.gz']},
     install_requires=[
         'chardet ; python_version > "3.0"',
         'cryptography',
@@ -26,7 +26,7 @@ setup(
     license='MIT/X',
     author='Yusuke Shinyama + Philippe Guglielmetti',
     author_email='pdfminer@goulu.net',
-    url='https://github.com/pdfminer/pdfminer.six',
+    url='https://github.com/Mahender-debug/pdfminer.six.git',
     scripts=[
         'tools/pdf2txt.py',
         'tools/dumppdf.py',
