@@ -31,7 +31,9 @@ Transaction Details,narration
 Narration,narration
 DESCRIPTION,narration
 Remarks,narration
+remarks.,narration
 Remark,narration
+remarks:,narration
 Transaction Remarks,narration
 TRANSACTION DETAILS,narration
 Details,narration
@@ -102,7 +104,7 @@ Amount (In Rs.),amount
 Withdrawal Amt.,debit_amount
 WithDrawal,debit_amount
 Withdrawal (Dr),debit_amount
-Withdrawal (Dr)/Deposit (Cr),debit_amount
+Withdrawal (Dr)/Deposit (Cr),amount
 Debits,debit_amount
 DEBITS,debit_amount
 Withdrawal (in Rs.),debit_amount
@@ -146,6 +148,7 @@ Credits,credit_amount
 Deposits,credit_amount
 Credit,credit_amount
 Balance (In Rs.),balance
+balance*,balance
 Closing Balance,balance
 Balance (in Rs.),balance
 Balance 13,balance
@@ -156,8 +159,8 @@ Available Balance(INR),balance
 BALANCE AMT,balance
 Balance (INR),balance
 Bal.,balance
-Total Amount Dr/Cr,balance
 Total Amount,balance
+Total Amount Dr/Cr,balance
 Balance(INR),balance
 Account Balance,balance
 Balance Amount,balance
@@ -174,3 +177,9 @@ CR/DR,txnCategory
 Dr/Cr,txnCategory
 Tran Type,txnType
 Type,txnType
+Transaction Debit Amount,debit_amount
+Transaction Credit Amount,credit_amount
+Available Balance,balance
+Withdrawal Amount,debit_amount
+Deposit Amount,credit_amount
+Closing Balance*,balance

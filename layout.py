@@ -12,9 +12,11 @@ from .utils import uniq
 import datetime
 from pprint import pprint
 from dateutil import parser
-
+from pathlib import Path
 import pandas as pd
 logger = logging.getLogger(__name__)
+
+mappings_file_path = Path(__file__).parent/"Mapping_BS_fields.csv"
 
 
 class IndexAssigner:
@@ -59,13 +61,14 @@ class LAParams:
     :param all_texts: If layout analysis should be performed on text in
         figures.
     """
+
     def __init__(self,
                  line_overlap=0.5,
                  char_margin=2.0,
                  line_margin=0.5,
                  word_margin=0.1,
                  boxes_flow=0.5,
-                 char_margin_for_word=0.01,
+                 char_margin_for_word=0.05,
                  detect_vertical=False,
                  all_texts=False):
         self.line_overlap = line_overlap
@@ -99,6 +102,7 @@ class LAParams:
 
 class LTItem:
     """Interface for things that can be analyzed"""
+
     def analyze(self, laparams):
         """Perform the layout analysis."""
         return
@@ -106,6 +110,7 @@ class LTItem:
 
 class LTText:
     """Interface for things that have text"""
+
     def __repr__(self):
         return ('<%s %r>' % (self.__class__.__name__, self.get_text()))
 
@@ -116,9 +121,10 @@ class LTText:
 
 class LTComponent(LTItem):
     """Object with a bounding box"""
+
     def __init__(self, bbox):
         LTItem.__init__(self)
-        bbox = tuple(map(lambda x: round(x, 2) , list(bbox) ))
+        bbox = tuple(map(lambda x: round(x, 2), list(bbox)))
         self.set_bbox(bbox)
         return
 
@@ -191,6 +197,7 @@ class LTComponent(LTItem):
 
 class LTCurve(LTComponent):
     """A generic Bezier curve"""
+
     def __init__(self,
                  linewidth,
                  pts,
@@ -218,6 +225,7 @@ class LTLine(LTCurve):
 
     Could be used for separating text or figures.
     """
+
     def __init__(self,
                  linewidth,
                  p0,
@@ -237,6 +245,7 @@ class LTRect(LTCurve):
 
     Could be used for framing another pictures or figures.
     """
+
     def __init__(self,
                  linewidth,
                  bbox,
@@ -257,6 +266,7 @@ class LTImage(LTComponent):
 
     Embedded images can be in JPEG, Bitmap or JBIG2.
     """
+
     def __init__(self, name, stream, bbox):
         LTComponent.__init__(self, bbox)
         self.name = name
@@ -282,6 +292,7 @@ class LTAnno(LTItem, LTText):
     not, as these are "virtual" characters, inserted by a layout analyzer
     according to the relationship between two characters (e.g. a space).
     """
+
     def __init__(self, text):
         self._text = text
         return
@@ -292,6 +303,7 @@ class LTAnno(LTItem, LTText):
 
 class LTChar(LTComponent, LTText):
     """Actual letter in the text as a Unicode string."""
+
     def __init__(self, matrix, font, fontsize, scaling, rise, text, textwidth,
                  textdisp, ncs, graphicstate):
         LTText.__init__(self)
@@ -348,6 +360,7 @@ class LTChar(LTComponent, LTText):
 
 class LTContainer(LTComponent):
     """Object that can be extended and analyzed"""
+
     def __init__(self, bbox):
         LTComponent.__init__(self, bbox)
         self._objs = []
@@ -403,6 +416,7 @@ class LTTextWord(LTTextContainer):
     The characters are aligned either horizontally or vertically, depending on
     the text's writing mode.
     """
+
     def __init__(self, char_margin_for_word):
         LTTextContainer.__init__(self)
         self.char_margin_for_word = char_margin_for_word
@@ -429,7 +443,7 @@ class LTTextWord(LTTextContainer):
     def is_compatible(self, obj):
         """Returns True if two characters can coexist in the same line."""
         return True
-    
+
 
 class LTTextWordHorizontal(LTTextWord):
     def __init__(self, char_margin_for_word):
@@ -444,14 +458,13 @@ class LTTextWordHorizontal(LTTextWord):
         # LTContainer.add(self, LTAnno(' '))
         self._x1 = obj.x1
         self.num_of_chars += 1
-            
-        
-        if self.num_of_chars <=2:
+
+        if self.num_of_chars <= 2:
             self.fontsize = round(obj.size, 1)
-        
+
         if self.fontname == "":
             self.fontname = obj.fontname
-        
+
         if self.nature == "" and obj.get_text() == ":":
             self.nature = "form"
 
@@ -494,7 +507,7 @@ class LTTextWordVertical(LTTextWord):
         #         LTContainer.add(self, LTAnno(' '))
         self._y0 = obj.y0
         self.num_of_chars += 1
-        if self.num_of_chars <=2:
+        if self.num_of_chars <= 2:
             self.fontsize = round(obj.size, 1)
         if self.fontname == "":
             self.fontname = obj.fontname
@@ -550,6 +563,7 @@ class LTTextLine(LTTextContainer):
     The characters are aligned either horizontally or vertically, depending on
     the text's writing mode.
     """
+
     def __init__(self, word_margin):
         LTTextContainer.__init__(self)
         self.word_margin = word_margin
@@ -574,21 +588,21 @@ class LTTextLine(LTTextContainer):
 
     def is_date(self, date_string):
         regex = re.compile(':')
-        
-        if "cr" in date_string.lower() or "dr" in date_string.lower() or date_string.lower().startswith(("/","-",":",";",",")):
+
+        if "cr" in date_string.lower() or "dr" in date_string.lower() or date_string.lower().startswith(("/", "-", ":", ";", ",")):
             return None
         try:
             check = float(date_string)
-            
+
             return None
         except:
             pass
-        
+
         if regex.search(date_string) != None:
-            
+
             return None
-        
-        if len(date_string) < 6 or len(date_string) >12:
+
+        if len(date_string) < 6 or len(date_string) > 12:
             return None
         date_string = str(date_string)
         if not date_string:
@@ -609,15 +623,15 @@ class LTTextLine(LTTextContainer):
             return input_date
         except:
             return None
-        
+
     def is_header(self, input):
-        mappings = pd.read_csv("/home/mahender/anaconda3/lib/python3.8/site-packages/custom_pdfminer/Mapping_BS_fields.csv")
+        mappings = pd.read_csv(mappings_file_path)
         mappings["small_Key"] = mappings["Key"].str.lower()
         mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
-        
+
         if input.lower() in list(mappings["small_Key"]):
             return True
-        
+
         return False
 
 
@@ -636,7 +650,7 @@ class LTTextLineHorizontal(LTTextLine):
 
         if self.nature == "" and obj.nature == "form":
             self.nature = "form"
-        
+
         if self.is_date(obj.get_text()):
             obj.type = "date"
         if self.is_header(obj.get_text()):
@@ -772,6 +786,7 @@ class LTTextBox(LTTextContainer):
     necessarily represents a logical boundary of the text. It contains a list
     of LTTextLine objects.
     """
+
     def __init__(self):
         LTTextContainer.__init__(self)
         self.index = -1
@@ -784,7 +799,7 @@ class LTTextBox(LTTextContainer):
 
     def get_text(self):
         return ' '.join(obj.get_text() for obj in self
-                       if isinstance(obj, LTText))
+                        if isinstance(obj, LTText))
 
 
 class LTTextBoxHorizontal(LTTextBox):
@@ -837,8 +852,9 @@ class LTLayoutContainer(LTContainer):
         LTContainer.__init__(self, bbox)
         self.groups = None
         return
+
     def is_date(self, date_string):
-        
+
         # print("date: ",date_string)
         regex = re.compile(':')
         if "cr" in date_string.lower() or "dr" in date_string.lower():
@@ -851,8 +867,8 @@ class LTLayoutContainer(LTContainer):
 
         if regex.search(date_string) != None:
             return None
-        
-        if len(date_string) < 6 or len(date_string) >12:
+
+        if len(date_string) < 6 or len(date_string) > 12:
             return None
         date_string = str(date_string)
         if not date_string:
@@ -872,16 +888,18 @@ class LTLayoutContainer(LTContainer):
         except:
             # input_date = parser.parse(date_string)
             return None
+
     def is_header(self, input):
-        mappings = pd.read_csv("/home/mahender/anaconda3/lib/python3.8/site-packages/custom_pdfminer/Mapping_BS_fields.csv")
+        mappings = pd.read_csv(mappings_file_path)
         mappings["small_Key"] = mappings["Key"].str.lower()
         mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
-        
+
         if input.lower() in list(mappings["small_Key"]):
             return True
-        
+
         return False
     # group_objects: group text object to textlines.
+
     def group_objects(self, laparams, objs):
         obj0 = None
         line = None
@@ -953,7 +971,7 @@ class LTLayoutContainer(LTContainer):
         if line is None:
             line = LTTextLineHorizontal(laparams.word_margin)
             line.add(obj0)
-        
+
         yield line
         return
 
@@ -1115,7 +1133,7 @@ class LTLayoutContainer(LTContainer):
                     < obj0.hoverlap(obj1) \
                     and obj0.vdistance(obj1) \
                     < max(obj0.height, obj1.height) * laparams.char_margin_for_word
-                
+
                 if halign and isinstance(
                         word, LTTextWordHorizontal
                 ) and obj1.get_text() != " " and obj1.get_text() != "\n":
@@ -1126,14 +1144,14 @@ class LTLayoutContainer(LTContainer):
                     word = None
                 else:
                     if valign and not halign:
-                        
+
                         word = LTTextWordVertical(
                             laparams.char_margin_for_word)
                         if obj0.get_text() != " " and obj0.get_text() != "\n":
                             word.add(obj0)
                         if obj1.get_text() != " " and obj1.get_text() != "\n":
                             word.add(obj1)
-                    
+
                     elif halign and not valign:
                         word = LTTextWordHorizontal(
                             laparams.char_margin_for_word)
@@ -1155,8 +1173,10 @@ class LTLayoutContainer(LTContainer):
 
         yield word
         return
-    def customY(self,word):
+
+    def customY(self, word):
         return -word.bbox[1]
+
     def analyze(self, laparams):
         # textobjs is a list of LTChar objects, i.e.
         # it has all the individual characters in the page.
@@ -1169,7 +1189,7 @@ class LTLayoutContainer(LTContainer):
         textwords = list(self.group_textchars(laparams, textobjs))
         textlines = list(self.group_objects(laparams, textwords))
         (empties, textlines) = fsplit(lambda obj: obj.is_empty(), textlines)
-        
+
         for obj in empties:
             obj.analyze(laparams)
         textboxes = list(self.group_textlines(laparams, textlines))
@@ -1180,7 +1200,7 @@ class LTLayoutContainer(LTContainer):
                     for word in line:
                         if isinstance(word, LTTextWord):
                             temp_words.append(word)
-            
+
             temp_words.sort(key=self.customY)
             test_string = ""
             for obj in temp_words:
@@ -1218,6 +1238,7 @@ class LTFigure(LTLayoutContainer):
     another PDF document within a page. Note that LTFigure objects can appear
     recursively.
     """
+
     def __init__(self, name, bbox, matrix):
         self.name = name
         self.matrix = matrix
@@ -1245,6 +1266,7 @@ class LTPage(LTLayoutContainer):
     May contain child objects like LTTextBox, LTFigure, LTImage, LTRect,
     LTCurve and LTLine.
     """
+
     def __init__(self, pageid, bbox, rotate=0):
         LTLayoutContainer.__init__(self, bbox)
         self.pageid = pageid
