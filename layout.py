@@ -10,10 +10,10 @@ from .utils import get_bound
 from .utils import matrix2str
 from .utils import uniq
 import datetime
-from pprint import pprint
 from dateutil import parser
 from pathlib import Path
 import pandas as pd
+from fuzzywuzzy import fuzz, process, utils
 logger = logging.getLogger(__name__)
 
 mappings_file_path = Path(__file__).parent/"Mapping_BS_fields.csv"
@@ -386,6 +386,87 @@ class LTContainer(LTComponent):
             obj.analyze(laparams)
         return
 
+    def is_date(self, date_string):
+
+        regex = re.compile(':')
+        if "cr" in date_string.lower() or "dr" in date_string.lower() or date_string.lower().startswith(("/", "-", ":", ";", ",")):
+            return None
+        try:
+            check = float(date_string)
+            return None
+        except:
+            pass
+
+        if regex.search(date_string) != None:
+            return None
+
+        if len(date_string) < 6 or len(date_string) > 12:
+            return None
+        date_string = str(date_string)
+        if not date_string:
+            return None
+        if "-" or "/" in date_string:
+            # "date_with_special_chars"
+
+            date_string = date_string.replace(" ", "")
+            date_string = date_string.replace("/", "-")
+        else:
+            date_type = "date_in_english"
+            # Replace some similar numbers in OCR
+        try:
+            input_date = parser.parse(date_string, dayfirst=True)
+            input_date = str(input_date).split()[0]
+            return input_date
+        except:
+            # input_date = parser.parse(date_string)
+            return None
+
+    def is_header(self, input):
+        mappings = pd.read_csv(mappings_file_path)
+        mappings["small_Key"] = mappings["Key"].str.lower()
+        mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
+
+        if input.lower() in list(mappings["small_Key"]):
+            return True
+
+        return False
+
+    def is_cl_bal(self, input):
+        input = input.replace("\n", "")
+
+        if input == "" or not (utils.full_process(input)):
+            return False
+        closing_bal_options = ["closingbalance",
+                               "closing bal", "clbal", "closing balance"]
+        highest_ratio = process.extractOne(
+            input.lower(), closing_bal_options)[1]
+
+        if highest_ratio >= 95:
+
+            return True
+        return False
+
+    def is_account_number(self, input):
+        input = input.replace("\n", "")
+
+        if input == "" or not (utils.full_process(input)):
+            return False
+        acc_nun_options = ["account number", "account",
+                           "acc num", "acc no", "accountno", "a/c", "a/cno", "a/cnum", "a/cnumber"]
+        highest_ratio = process.extractOne(input.lower(), acc_nun_options)[1]
+
+        if highest_ratio >= 95:
+
+            return True
+        return False
+
+    def is_ac_num_regex(self, input):
+        ac_num_regex = "[1-9][0-9]{9,18}"
+        input = input.replace("/n", "")
+        if re.search(ac_num_regex, input.lower()) != None:
+            return True
+        return False
+
 
 class LTExpandableContainer(LTContainer):
     def __init__(self):
@@ -425,6 +506,7 @@ class LTTextWord(LTTextContainer):
         self.num_of_chars = 0
         self.nature = ""
         self.type = ""
+        self.form_field = ""
         return
 
     def __repr__(self):
@@ -571,6 +653,7 @@ class LTTextLine(LTTextContainer):
         self.fontname = ""
         self.nature = ""
         self.type = ""
+        self.form_field = ""
         return
 
     def __repr__(self):
@@ -585,54 +668,6 @@ class LTTextLine(LTTextContainer):
 
     def find_neighbors(self, plane, ratio):
         raise NotImplementedError
-
-    def is_date(self, date_string):
-        regex = re.compile(':')
-
-        if "cr" in date_string.lower() or "dr" in date_string.lower() or date_string.lower().startswith(("/", "-", ":", ";", ",")):
-            return None
-        try:
-            check = float(date_string)
-
-            return None
-        except:
-            pass
-
-        if regex.search(date_string) != None:
-
-            return None
-
-        if len(date_string) < 6 or len(date_string) > 12:
-            return None
-        date_string = str(date_string)
-        if not date_string:
-            return None
-        if "-" or "/" in date_string:
-            # "date_with_special_chars"
-            date_string = date_string.replace(" -", "-")
-            date_string = date_string.replace("- ", "-")
-            date_string = date_string.replace("/ ", "-")
-            date_string = date_string.replace(" /", "-")
-            date_string = date_string.replace("/", "-")
-        else:
-            date_type = "date_in_english"
-            # Replace some similar numbers in OCR
-        try:
-            input_date = parser.parse(date_string, dayfirst=True)
-            input_date = str(input_date).split()[0]
-            return input_date
-        except:
-            return None
-
-    def is_header(self, input):
-        mappings = pd.read_csv(mappings_file_path)
-        mappings["small_Key"] = mappings["Key"].str.lower()
-        mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
-
-        if input.lower() in list(mappings["small_Key"]):
-            return True
-
-        return False
 
 
 class LTTextLineHorizontal(LTTextLine):
@@ -655,6 +690,15 @@ class LTTextLineHorizontal(LTTextLine):
             obj.type = "date"
         if self.is_header(obj.get_text()):
             obj.type = "header"
+        if self.is_cl_bal(self.get_text() + obj.get_text()):
+            self.form_field = "closing_balance"
+
+        if self.is_account_number(self.get_text() + obj.get_text()):
+            self.form_field = "account_number"
+        if self.is_account_number(obj.get_text()):
+            obj.form_field = "account_number"
+        if self.is_ac_num_regex(obj.get_text()):
+            obj.form_field = "ac_num_regex"
 
         if self.fontsize < obj.fontsize:
             self.fontsize = obj.fontsize
@@ -727,6 +771,10 @@ class LTTextLineVertical(LTTextLine):
             obj.type = "date"
         if self.is_header(obj.get_text()):
             obj.type = "header"
+        if self.is_cl_bal(obj.get_text()):
+            obj.form_field = "closing_balance"
+        if self.is_account_number(obj.get_text()):
+            obj.form_field = "account_number"
 
         if self.fontsize < obj.fontsize:
             self.fontsize = obj.fontsize
@@ -791,6 +839,7 @@ class LTTextBox(LTTextContainer):
         LTTextContainer.__init__(self)
         self.index = -1
         self.type = ""
+        self.form_field = ""
         return
 
     def __repr__(self):
@@ -853,51 +902,6 @@ class LTLayoutContainer(LTContainer):
         self.groups = None
         return
 
-    def is_date(self, date_string):
-
-        # print("date: ",date_string)
-        regex = re.compile(':')
-        if "cr" in date_string.lower() or "dr" in date_string.lower():
-            return None
-        try:
-            check = float(date_string)
-            return None
-        except:
-            pass
-
-        if regex.search(date_string) != None:
-            return None
-
-        if len(date_string) < 6 or len(date_string) > 12:
-            return None
-        date_string = str(date_string)
-        if not date_string:
-            return None
-        if "-" or "/" in date_string:
-            # "date_with_special_chars"
-
-            date_string = date_string.replace(" ", "")
-            date_string = date_string.replace("/", "-")
-        else:
-            date_type = "date_in_english"
-            # Replace some similar numbers in OCR
-        try:
-            input_date = parser.parse(date_string, dayfirst=True)
-            input_date = str(input_date).split()[0]
-            return input_date
-        except:
-            # input_date = parser.parse(date_string)
-            return None
-
-    def is_header(self, input):
-        mappings = pd.read_csv(mappings_file_path)
-        mappings["small_Key"] = mappings["Key"].str.lower()
-        mappings["small_Key"] = mappings["small_Key"].str.replace(" ", "")
-
-        if input.lower() in list(mappings["small_Key"]):
-            return True
-
-        return False
     # group_objects: group text object to textlines.
 
     def group_objects(self, laparams, objs):
@@ -978,8 +982,7 @@ class LTLayoutContainer(LTContainer):
     def group_textlines(self, laparams, lines):
         """Group neighboring lines to textboxes"""
         plane = Plane(self.bbox)
-        # pprint(lines)
-        # print("end")
+
         plane.extend(lines)
         boxes = {}
         for line in lines:
@@ -1192,6 +1195,7 @@ class LTLayoutContainer(LTContainer):
 
         for obj in empties:
             obj.analyze(laparams)
+
         textboxes = list(self.group_textlines(laparams, textlines))
         for temp_box in textboxes:
             temp_words = list()
@@ -1209,6 +1213,10 @@ class LTLayoutContainer(LTContainer):
                 temp_box.type = "date"
             if self.is_header(test_string):
                 temp_box.type = "header"
+            if self.is_cl_bal(test_string):
+                temp_box.form_field = "closing_balance"
+            if self.is_account_number(test_string):
+                temp_box.form_field = "account_number"
         if laparams.boxes_flow is None:
             for textbox in textboxes:
                 textbox.analyze(laparams)
